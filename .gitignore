@@ -1,0 +1,9 @@
+uploads/
+processed/
+temp/
+*.pyc
+__pycache__/
+.env
+.env.*
+.vscode/
+.DS_Store
