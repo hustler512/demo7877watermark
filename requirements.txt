@@ -1,0 +1,19 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+opencv-python==4.8.1.78
+numpy==1.24.3
+Pillow==10.1.0
+pytesseract==0.3.10
+aiofiles==23.1.0
+Jinja2==3.1.2
+ffmpeg-python==0.4.2
+# Optional / advanced
+redis==4.6.0
+rq==1.11.0
+loguru==0.7.0
+# For improved inpainting (optional - install only if you have CUDA or CPU capacity)
+torch==2.1.0
+torchvision==0.16.0
+pytest==7.4.0
+flake8==6.1.0

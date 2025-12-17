@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>CleanVideo Pro</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>CleanVideo Pro</h1>
+      <p class="sub">Remove watermarks & captions — local, no-login tool</p>
+    </header>
+
+    <section class="panel">
+      <div class="left">
+        <div class="video-box">
+          <video id="previewVideo" controls crossorigin="anonymous"></video>
+          <canvas id="overlayCanvas" class="overlay"></canvas>
+        </div>
+        <div class="uploader-row">
+          <input id="fileInput" type="file" accept="video/*" />
+          <button id="uploadBtn" class="primary">Upload</button>
+          <p id="fileInfo" class="muted">No file selected</p>
+        </div>
+      </div>
+
+      <aside class="right">
+        <div class="card">
+          <label>Tool
+            <select id="task">
+              <option value="watermark">Remove Watermark</option>
+              <option value="caption">Remove Captions</option>
+              <option value="audio">Remove Audio</option>
+            </select>
+          </label>
+
+          <label class="checkbox"><input type="checkbox" id="autoDetect" checked /> Auto-detect</label>
+          <label class="checkbox"><input type="checkbox" id="removeAudio" /> Remove audio</label>
+
+          <div class="mask-controls">
+            <p class="muted">Manual selection (when Auto-detect is off): draw a rectangle on the video.</p>
+            <div class="coords">
+              <label>X: <input type="number" id="mask_x" min="0" /></label>
+              <label>Y: <input type="number" id="mask_y" min="0" /></label>
+              <label>W: <input type="number" id="mask_w" min="1" /></label>
+              <label>H: <input type="number" id="mask_h" min="1" /></label>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="startBtn" class="primary large">Start Processing</button>
+            <button id="autoBtn" class="secondary">Auto-detect Now</button>
+            <button id="previewBtn" class="secondary">Preview</button>
+          </div>
+
+          <div class="progress">
+            <div id="progressBar"><div id="progressFill" style="width:0%"></div></div>
+            <p id="progressText"></p>
+          </div>
+
+          <div class="download">
+            <a id="downloadLink" style="display:none" class="primary">Download Clean Video</a>
+          </div>
+
+          <div class="preview-box" style="margin-top:12px">
+            <p class="muted">Preview (single-frame):</p>
+            <img id="previewImg" src="" alt="Preview" style="max-width:100%; display:none; border-radius:6px;" />
+          </div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
