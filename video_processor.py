@@ -6,6 +6,8 @@ import cv2
 import numpy as np
 import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -556,6 +558,44 @@ class VideoProcessor:
                 cmd = ['ffmpeg', '-y', '-i', str(final), '-vf', 'scale=-2:720', str(scaled)]
                 subprocess.run(cmd, check=True)
                 shutil.move(str(scaled), str(final))
+        except Exception:
+            pass
+
+        # Optional AI upscale step (Real-ESRGAN / similar). Controlled by env var USE_AI_UPSCALE=1.
+        try:
+            use_ai = os.environ.get('USE_AI_UPSCALE', '0') == '1'
+            model_file = Path('models') / 'realesrgan.pth'
+            if use_ai and model_file.exists():
+                # Attempt to use the `realesrgan` package if available; otherwise fallback to ffmpeg
+                try:
+                    from realesrgan import RealESRGAN
+                    import torch
+                    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+                    rr = RealESRGAN(device, scale=2)
+                    rr.load_weights(str(model_file))
+                    # Process frames: extract, enhance, then reconstruct
+                    frames_in = self.work_dir / 'ai_frames'
+                    frames_in.mkdir(parents=True, exist_ok=True)
+                    pattern = str(frames_in / 'frame_%06d.png')
+                    subprocess.run(['ffmpeg', '-y', '-i', str(final), '-vf', f'fps={self.fps}', pattern], check=True)
+                    # enhance frames
+                    enhanced_dir = self.work_dir / 'enhanced'
+                    enhanced_dir.mkdir(parents=True, exist_ok=True)
+                    for f in sorted(frames_in.glob('*.png')):
+                        try:
+                            img = rr.enhance(str(f))
+                            outf = enhanced_dir / f.name
+                            img.save(str(outf))
+                        except Exception:
+                            shutil.copy(str(f), str(enhanced_dir / f.name))
+                    # re-encode enhanced frames
+                    enc_temp = self.work_dir / 'ai_temp_video.mp4'
+                    cmd = ['ffmpeg', '-y', '-framerate', str(self.fps), '-i', str(enhanced_dir / 'frame_%06d.png'), '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', str(enc_temp)]
+                    subprocess.run(cmd, check=True)
+                    shutil.move(str(enc_temp), str(final))
+                except Exception:
+                    # fallback to ffmpeg scaler if AI path fails
+                    pass
         except Exception:
             pass
 

@@ -20,8 +20,13 @@ TEMP_DIR = BASE / 'temp'
 for d in [UPLOAD_DIR, PROCESSED_DIR, TEMP_DIR]:
     d.mkdir(exist_ok=True)
 
-# Simple in-memory job store
-jobs = {}
+# Simple in-memory job store (shared with worker tasks)
+try:
+    from tasks import jobs as jobs
+    from tasks import process_video_task
+except Exception:
+    # fallback to local in-memory if tasks module unavailable
+    jobs = {}
 
 # Static files and templates
 app.mount('/static', StaticFiles(directory='static'), name='static')
@@ -33,6 +38,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Quick diagnostics: detect GPU availability and Redis config for local debugging
+try:
+    from tools.gpu import detect_gpu
+    gpu = detect_gpu()
+    print(f"[startup] GPU device: {gpu}")
+except Exception:
+    print("[startup] GPU detection unavailable")
+
+redis_url = os.environ.get('REDIS_URL')
+if redis_url:
+    print(f"[startup] REDIS_URL is set: {redis_url}")
+else:
+    print("[startup] REDIS_URL not set; running in local/background task mode")
 
 @app.get('/', response_class=HTMLResponse)
 async def index(request: Request):
@@ -163,84 +182,7 @@ def cleanup_files_later(job_id: str, delay: int = 3600):
         pass
 
 
-def process_video_task(job_id, input_path, output_path, task, mask_coords, remove_audio, auto_detect):
-    try:
-        jobs[job_id]['progress'] = 20
-        proc = VideoProcessor(input_path, output_path, job_id)
-
-        jobs[job_id]['progress'] = 30
-        proc.extract_frames()
-
-        # Count frames for progress reporting
-        frame_files = sorted(proc.frames_dir.glob('*.png'))
-        total_frames = len(frame_files)
-
-        jobs[job_id]['progress'] = 40
-        audio = proc.extract_audio()
-
-        jobs[job_id]['progress'] = 50
-        # Try soft-subtitle removal if requested explicitly
-        if task == 'caption' and not auto_detect:
-            no_subs = str(Path(output_path).with_suffix('.nosubs' + Path(output_path).suffix))
-            try:
-                proc.remove_soft_subtitles(no_subs)
-                shutil.move(no_subs, output_path)
-                jobs[job_id]['progress'] = 100
-                jobs[job_id]['status'] = 'completed'
-                jobs[job_id]['output'] = output_path
-                # schedule cleanup
-                import threading
-                threading.Thread(target=cleanup_files_later, args=(job_id,)).start()
-                return
-            except Exception:
-                pass
-
-        jobs[job_id]['progress'] = 55
-        if task in ('watermark', 'caption'):
-            # For watermark task, if auto-detect requested and no manual mask, try watermark detection
-            if task == 'watermark' and auto_detect and not mask_coords:
-                try:
-                    detected = proc.detect_watermark()
-                    if detected:
-                        mask_coords = detected
-                        jobs[job_id]['progress'] = 58
-                except Exception:
-                    pass
-            # If caption auto-detect requested, try to detect boxes and use combined bbox
-            if task == 'caption' and auto_detect:
-                boxes, combined = proc.detect_captions()
-                if combined:
-                    mask_coords = combined
-
-            # progress range for frames: 55 -> 80
-            def frame_progress_callback(done, total):
-                try:
-                    base = 55
-                    end = 80
-                    pct = base + int((done/total) * (end-base))
-                    jobs[job_id]['progress'] = pct
-                except Exception:
-                    pass
-
-            max_workers = int(os.environ.get('MAX_WORKERS', 0)) or None
-            proc.process_frames(mask_coords=mask_coords, use_auto=auto_detect, progress_callback=frame_progress_callback, max_workers=max_workers)
-
-        jobs[job_id]['progress'] = 80
-        # optionally enable nvenc via env var
-        use_nvenc = os.environ.get('USE_NVENC', '0') == '1'
-        proc.reconstruct_video(remove_audio=remove_audio, use_nvenc=use_nvenc)
-
-        jobs[job_id]['status'] = 'completed'
-        jobs[job_id]['progress'] = 100
-        jobs[job_id]['output'] = output_path
-
-        # schedule cleanup after 1 hour in background thread
-        import threading
-        threading.Thread(target=cleanup_files_later, args=(job_id,)).start()
-    except Exception as e:
-        jobs[job_id]['status'] = 'failed'
-        jobs[job_id]['error'] = str(e)
-        print('Processing error:', e)
+# Processing tasks are implemented in `tasks.py` for worker separation.
 
 @app.get('/status/{job_id}')
 async def status(job_id: str):
